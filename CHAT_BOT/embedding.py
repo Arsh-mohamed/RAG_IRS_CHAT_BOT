@@ -19,10 +19,17 @@ class OpenAIEmbeddingsAdapter(Embeddings):
         super().__init__()
         self.model = model
         self.client = OpenAI(api_key=api_key or OPENAI_API_KEY)
+        self.batch_size = int(os.getenv("OPENAI_EMBEDDING_BATCH_SIZE", "64"))
+        if self.batch_size < 1:
+            raise ValueError("OPENAI_EMBEDDING_BATCH_SIZE must be at least 1")
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        response = self.client.embeddings.create(model=self.model, input=texts)
-        return [item.embedding for item in response.data]
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), self.batch_size):
+            batch = texts[start:start + self.batch_size]
+            response = self.client.embeddings.create(model=self.model, input=batch)
+            embeddings.extend(item.embedding for item in response.data)
+        return embeddings
 
     def embed_query(self, text: str) -> list[float]:
         return self.embed_documents([text])[0]
