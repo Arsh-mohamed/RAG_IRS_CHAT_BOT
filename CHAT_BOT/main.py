@@ -1,86 +1,68 @@
+import argparse
 from pathlib import Path
 
-from excel_load import load_data
 from chunk import chunk_pdf
 from embedding import store_chunks_in_chroma
+from excel_load import load_data
 from retrival import run_chat
 
 
-# Default path points to the workspace DATA folder.
-DATA_PATH = Path(__file__).resolve().parent.parent / "DATA"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_PATH = BASE_DIR.parent / "DATA"
+CHROMA_PATH = BASE_DIR / "db" / "chroma"
 
 
-def ingest_data():
-    path = DATA_PATH
-
-    if not path.exists():
-        print(f"❌ Path not found: {path}")
+def ingest_data() -> bool:
+    if not DATA_PATH.exists():
+        print(f"Path not found: {DATA_PATH}")
+        return False
+    if not DATA_PATH.is_dir():
+        print(f"Expected a data directory: {DATA_PATH}")
         return False
 
-    suffix = path.suffix.lower()
-    if path.is_dir():
-        print(f"Loading data from directory: {path}")
-        load_data(str(path))
+    print(f"Loading structured data from directory: {DATA_PATH}")
+    load_data(str(DATA_PATH))
 
-        pdf_files = sorted(path.glob("*.pdf"))
-        if not pdf_files:
-            print("No PDF files found to chunk in the directory.")
-            return False
+    pdf_files = sorted(DATA_PATH.glob("*.pdf"))
+    if not pdf_files:
+        print("No PDF files found to chunk in the directory.")
+        return False
 
-        for pdf_path in pdf_files:
-            print(f"Chunking PDF: {pdf_path}")
-            try:
-                chunks = chunk_pdf(
-                    pdf_path=str(pdf_path),
-                    markdown_path=None,
-                    max_tokens=1024,
-                    merge_peers=True,
-                )
-                print(f"✅ Chunked {len(chunks)} segments from {pdf_path}")
-                chroma = store_chunks_in_chroma(
-                    chunks,
-                    collection_name=pdf_path.stem,
-                    persist_directory=Path(__file__).resolve().parent / "db" / "chroma",
-                )
-                print(f"✅ Stored chunks in Chroma collection '{pdf_path.stem}'")
-            except FileNotFoundError as exc:
-                print(f"❌ {exc}")
-        return True
-
-    if suffix in {".csv", ".xlsx", ".xls"}:
-        print(f"Loading structured data from file: {path}")
-        load_data(str(path))
-        return True
-
-    if suffix == ".pdf":
-        print(f"Chunking PDF: {path}")
+    for pdf_path in pdf_files:
+        print(f"Chunking PDF: {pdf_path}")
         try:
             chunks = chunk_pdf(
-                pdf_path=str(path),
+                pdf_path=str(pdf_path),
                 markdown_path=None,
                 max_tokens=1024,
                 merge_peers=True,
             )
-            print(f"✅ Chunked {len(chunks)} segments from {path}")
-            chroma = store_chunks_in_chroma(
+            print(f"Chunked {len(chunks)} segments from {pdf_path}")
+            store_chunks_in_chroma(
                 chunks,
-                collection_name=path.stem,
-                persist_directory=Path(__file__).resolve().parent / "db" / "chroma",
+                collection_name=pdf_path.stem,
+                persist_directory=CHROMA_PATH,
             )
-            print(f"✅ Stored chunks in Chroma collection '{path.stem}'")
+            print(f"Stored chunks in Chroma collection '{pdf_path.stem}'")
         except FileNotFoundError as exc:
-            print(f"❌ {exc}")
-        return True
+            print(f"Could not process {pdf_path}: {exc}")
+            return False
 
-    print(
-        f"Unsupported path type: {path}. Provide a directory, CSV/XLSX file, or PDF file."
+    return True
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the IRS retrieval chat.")
+    parser.add_argument(
+        "--ingest",
+        action="store_true",
+        help="load structured files and rebuild PDF vector collections before chat",
     )
-    return False
+    args = parser.parse_args()
 
-
-def main():
-    if ingest_data():
-        run_chat()
+    if args.ingest and not ingest_data():
+        return
+    run_chat()
 
 
 if __name__ == "__main__":
