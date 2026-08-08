@@ -1,4 +1,8 @@
+import os
 from pathlib import Path
+
+os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+
 from docling.document_converter import DocumentConverter
 from docling.chunking import HybridChunker
 
