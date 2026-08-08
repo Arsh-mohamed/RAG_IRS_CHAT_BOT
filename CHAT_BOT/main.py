@@ -3,18 +3,19 @@ from pathlib import Path
 from excel_load import load_data
 from chunk import chunk_pdf
 from embedding import store_chunks_in_chroma
+from retrival import run_chat
 
 
 # Default path points to the workspace DATA folder.
 DATA_PATH = Path(__file__).resolve().parent.parent / "DATA"
 
 
-def main():
+def ingest_data():
     path = DATA_PATH
 
     if not path.exists():
         print(f"❌ Path not found: {path}")
-        return
+        return False
 
     suffix = path.suffix.lower()
     if path.is_dir():
@@ -24,7 +25,7 @@ def main():
         pdf_files = sorted(path.glob("*.pdf"))
         if not pdf_files:
             print("No PDF files found to chunk in the directory.")
-            return
+            return False
 
         for pdf_path in pdf_files:
             print(f"Chunking PDF: {pdf_path}")
@@ -44,12 +45,12 @@ def main():
                 print(f"✅ Stored chunks in Chroma collection '{pdf_path.stem}'")
             except FileNotFoundError as exc:
                 print(f"❌ {exc}")
-        return
+        return True
 
     if suffix in {".csv", ".xlsx", ".xls"}:
         print(f"Loading structured data from file: {path}")
         load_data(str(path))
-        return
+        return True
 
     if suffix == ".pdf":
         print(f"Chunking PDF: {path}")
@@ -69,11 +70,17 @@ def main():
             print(f"✅ Stored chunks in Chroma collection '{path.stem}'")
         except FileNotFoundError as exc:
             print(f"❌ {exc}")
-        return
+        return True
 
     print(
         f"Unsupported path type: {path}. Provide a directory, CSV/XLSX file, or PDF file."
     )
+    return False
+
+
+def main():
+    if ingest_data():
+        run_chat()
 
 
 if __name__ == "__main__":

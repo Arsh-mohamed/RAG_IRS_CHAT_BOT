@@ -399,16 +399,20 @@ def print_answers(query, answers):
             print(f"    Chunk index: {result['chunk_index']}")
 
 
+def run_chat():
+    while True:
+        question = input("\nAsk a tax question (q to quit): ").strip()
+        if question.lower() in {"q", "quit", "quite"}:
+            print("Goodbye!")
+            break
+        if not question:
+            continue
+        print_answers(question, answer_question(question))
+
+
 if __name__ == "__main__":
     question = " ".join(sys.argv[1:]).strip()
     if question:
         print_answers(question, answer_question(question))
     else:
-        while True:
-            question = input("\nAsk a tax question (q to quit): ").strip()
-            if question.lower() in {"q", "quit", "quite"}:
-                print("Goodbye!")
-                break
-            if not question:
-                continue
-            print_answers(question, answer_question(question))
+        run_chat()
