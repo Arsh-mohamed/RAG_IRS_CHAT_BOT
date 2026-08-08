@@ -5,6 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from langchain_chroma import Chroma
+from sentence_transformers import CrossEncoder
 from embedding import OpenAIEmbeddingsAdapter
 
 
@@ -12,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "DATA"
 DB_PATH = BASE_DIR / "db" / "sqlite.db"
 CHROMA_PATH = BASE_DIR / "db" / "chroma"
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+_reranker = None
 
 
 def tokenize(text):
@@ -19,7 +22,7 @@ def tokenize(text):
 
 
 def get_store(
-    collection_name="IRS_Publication15T",
+    collection_name,
     persist_directory=CHROMA_PATH,
 ):
     return Chroma(
@@ -27,6 +30,13 @@ def get_store(
         persist_directory=str(persist_directory),
         embedding_function=OpenAIEmbeddingsAdapter(),
     )
+
+
+def get_stores(persist_directory=CHROMA_PATH):
+    return [
+        get_store(path.stem, persist_directory=persist_directory)
+        for path in sorted(DATA_DIR.glob("*.pdf"))
+    ]
 
 
 def dense_search(store, query, k=50):
@@ -67,13 +77,23 @@ def bm25_scores(query, texts):
     return scores
 
 
-def rerank(query, text):
-    query_tokens = set(tokenize(query))
-    text_tokens = set(tokenize(text))
-    if not query_tokens:
-        return 0.0
-    overlap = query_tokens.intersection(text_tokens)
-    return len(overlap) / len(query_tokens)
+def _get_reranker():
+    global _reranker
+    if _reranker is None:
+        _reranker = CrossEncoder(RERANKER_MODEL)
+    return _reranker
+
+
+def rerank(query, texts):
+    if not texts:
+        return []
+    pairs = [(query, text) for text in texts]
+    scores = _get_reranker().predict(
+        pairs,
+        batch_size=16,
+        show_progress_bar=False,
+    )
+    return [float(score) for score in scores]
 
 
 def hybrid_search(store, query, top_k=10, dense_k=50):
@@ -83,11 +103,12 @@ def hybrid_search(store, query, top_k=10, dense_k=50):
 
     texts = [hit["text"] for hit in dense_hits]
     bm25 = bm25_scores(query, texts)
+    rerank_scores = rerank(query, texts)
 
     results = []
-    for hit, score in zip(dense_hits, bm25):
-        rerank_score = rerank(query, hit["text"])
-        hybrid_score = hit["dense_score"] + 0.5 * score
+    for hit, score, rerank_score in zip(dense_hits, bm25, rerank_scores):
+        dense_similarity = 1 / (1 + hit["dense_score"])
+        hybrid_score = rerank_score + 0.1 * dense_similarity + 0.05 * score
         final_score = hybrid_score + 0.2 * rerank_score
         results.append({
             "text": hit["text"],
@@ -166,7 +187,7 @@ def _source_file(table_name):
 
 
 def _pdf_document(store):
-    collection_name = getattr(store, "_collection_name", "IRS_Publication15T")
+    collection_name = getattr(store, "_collection_name", "unknown")
     candidate = DATA_DIR / f"{collection_name}.pdf"
     return candidate.name if candidate.exists() else f"{collection_name}.pdf"
 
@@ -343,15 +364,22 @@ def answer_question(query, store=None, top_k=5):
     if historical is not None:
         return [historical]
 
-    store = store or get_store()
-    results = hybrid_search(store, query, top_k=top_k)
+    stores = [store] if store is not None else get_stores()
+    results = []
+    for current_store in stores:
+        for result in hybrid_search(current_store, query, top_k=top_k):
+            result["_store"] = current_store
+            results.append(result)
+    results.sort(key=lambda item: item["hybrid_score"], reverse=True)
+    results = results[:top_k]
     answers = []
     for result in results:
         metadata = result["metadata"]
+        current_store = result.pop("_store")
         answers.append({
             "answer": result["text"],
             "source": "PDF",
-            "document_number": metadata.get("source") or _pdf_document(store),
+            "document_number": metadata.get("source") or _pdf_document(current_store),
             "chunk_index": metadata.get("chunk_index", "unknown"),
             "metadata": metadata,
         })
