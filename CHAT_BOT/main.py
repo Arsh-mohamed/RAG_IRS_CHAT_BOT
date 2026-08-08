@@ -41,7 +41,7 @@ def main():
                     collection_name=pdf_path.stem,
                     persist_directory=Path(__file__).resolve().parent / "db" / "chroma",
                 )
-                print(f"✅ Stored chunks in Chroma collection '{chroma.collection_name}'")
+                print(f"✅ Stored chunks in Chroma collection '{pdf_path.stem}'")
             except FileNotFoundError as exc:
                 print(f"❌ {exc}")
         return
@@ -66,7 +66,7 @@ def main():
                 collection_name=path.stem,
                 persist_directory=Path(__file__).resolve().parent / "db" / "chroma",
             )
-            print(f"✅ Stored chunks in Chroma collection '{chroma.collection_name}'")
+            print(f"✅ Stored chunks in Chroma collection '{path.stem}'")
         except FileNotFoundError as exc:
             print(f"❌ {exc}")
         return

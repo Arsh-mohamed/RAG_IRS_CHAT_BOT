@@ -66,10 +66,22 @@ def store_chunks_in_chroma(
     collection_name: str = "rag_chunks",
     persist_directory: str | Path = "db/chroma",
 ) -> Chroma:
-    texts = [getattr(chunk, "text", str(chunk)) for chunk in chunks]
+    valid_chunks = []
+    skipped_chunks = 0
+    for chunk in chunks:
+        text = getattr(chunk, "text", str(chunk))
+        if not isinstance(text, str) or not text.strip():
+            skipped_chunks += 1
+            continue
+        valid_chunks.append((chunk, text))
+
+    if skipped_chunks:
+        print(f"Skipped {skipped_chunks} empty chunk(s) before embedding")
+
+    texts = [text for _, text in valid_chunks]
     metadatas: list[dict] = []
 
-    for idx, chunk in enumerate(chunks):
+    for idx, (chunk, _) in enumerate(valid_chunks):
         metadata = getattr(chunk, "metadata", None)
         if isinstance(metadata, dict):
             metadata_dict = metadata.copy()
@@ -80,7 +92,7 @@ def store_chunks_in_chroma(
         metadata_dict["chunk_index"] = idx
         metadatas.append(metadata_dict)
 
-    ids = [str(idx) for idx in range(len(chunks))]
+    ids = [str(idx) for idx in range(len(valid_chunks))]
     return create_chroma_store(
         texts=texts,
         metadatas=metadatas,
