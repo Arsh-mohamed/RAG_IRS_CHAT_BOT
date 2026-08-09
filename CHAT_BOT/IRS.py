@@ -32,11 +32,11 @@ TEMPERATURE = 0.2            # low = focused/factual; raise for chattier replies
 SYSTEM_PROMPT = (
     "You are a helpful, conversational assistant that answers questions about "
     "US tax documents. Use the retrieved context to inform your answer and the "
-    "strictly provide data from the context. You have access to the recent.Don't calculate on your own. Use the provided context to answer questions, and if the context doesn't fully cover the question, answer as best you can and be upfront about anything you're unsure of. Always return the source document number(s) for any information you provide."
+    "strictly provide data from the context. You have access to the recent.Don't calculate on your own. Use the provided context to answer questions, and if the context doesn't fully cover the question, answer as best you can and be upfront about anything you're unsure of. Always return the source filename(s) for any information you provide."
     "conversation history to understand follow-up questions. Reply naturally, "
     "as if chatting. If the context doesn't fully cover the question, answer as "
     "best you can and be upfront about anything you're unsure of"
-    "always return the source document number(s) for any information you provide"
+    "always return the source filename(s) for any information you provide"
     "if you don't know the answer, say so instead of making something up.you can say you are not aware of the answer_question"
 )
 
@@ -47,7 +47,7 @@ def format_context(results):
         return "(no relevant context found)"
     blocks = []
     for i, r in enumerate(results, start=1):
-        source = r.get("document_number", "unknown")
+        source = r.get("source_filename", "unknown")
         blocks.append(f"[{i}] (from {source}) {r['answer']}")
     return "\n\n".join(blocks)
 

@@ -253,6 +253,11 @@ def _pdf_document(store):
     return candidate.name if candidate.exists() else f"{name}.pdf"
 
 
+def _source_filename(value):
+    """Return only the filename portion of a source metadata value."""
+    return Path(str(value)).name
+
+
 # ===========================================================================
 # PART 6 — EXACT ANSWERS FROM SQLITE
 # ===========================================================================
@@ -331,7 +336,7 @@ def sqlite_tax_answer(query, db_path=DB_PATH):
     return {
         "answer": answer,
         "source": "SQLite",
-        "document_number": _source_file(table),
+        "source_filename": _source_file(table),
         "metadata": {"source_url": row["primary_source_url"], "tax_year": tax_year, "table": table},
     }
 
@@ -419,7 +424,7 @@ def sqlite_historical_answer(query, db_path=DB_PATH):
     return {
         "answer": f"In {tax_year}, {label} was {value_text}.",
         "source": "SQLite",
-        "document_number": _source_file(table),
+        "source_filename": _source_file(table),
         "metadata": {"table": table, "tax_year": tax_year, "item": label},
     }
 
@@ -451,7 +456,9 @@ def answer_question(query, store=None, top_k=5):
         answers.append({
             "answer": hit["text"],
             "source": "PDF",
-            "document_number": metadata.get("source") or _pdf_document(current_store),
+            "source_filename": _source_filename(
+                metadata.get("source") or _pdf_document(current_store)
+            ),
             "chunk_index": metadata.get("chunk_index", "unknown"),
             "metadata": metadata,
         })
@@ -470,7 +477,7 @@ def print_answers(query, answers):
         clean_text = result["answer"][:1000].replace("\n", " ")
         print(f"\n[{index}] Answer: {clean_text}")
         print(f"    Source: {result['source']}")
-        print(f"    Document: {result['document_number']}")
+        print(f"    Source filename: {result['source_filename']}")
         if "chunk_index" in result:
             print(f"    Chunk index: {result['chunk_index']}")
 
